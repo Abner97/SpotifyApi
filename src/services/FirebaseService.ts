@@ -1,7 +1,9 @@
+import { ServiceRenewTokenResponse } from "../models/ServiceRenewTokenResponse";
 import {
   addDoc,
   collection,
   doc,
+  DocumentData,
   Firestore,
   getDoc,
   setDoc,
@@ -40,13 +42,53 @@ export default class FirebaseService {
     }
   }
 
-  private async getTokenStoreID(userId: string): Promise<string> {
-    const docRef = doc(this.fireStore, "users", userId);
+  async updateAccessToken(
+    newAccessToken: string,
+    userId: string
+  ): Promise<boolean> {
+    const tokenID = await this.getTokenStoreID(userId);
+    try {
+      await setDoc(
+        doc(this.fireStore, "usersTokens", tokenID),
+        {
+          accessToken: newAccessToken,
+        },
+        { merge: true }
+      );
+      console.log(`Access token successfully updated `);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async getDocumentData(
+    collection: string,
+    document: string
+  ): Promise<DocumentData> {
+    const docRef = doc(this.fireStore, collection, document);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      return docSnap.data().tokensStoreID;
+      return docSnap.data();
     } else {
-      throw new Error("Invalid User");
+      return {};
+    }
+  }
+
+  private async getTokenStoreID(userId: string): Promise<string> {
+    const response = await this.getDocumentData("users", userId);
+    return response.tokensStoreID;
+  }
+
+  async getUserRenewToken(
+    userId: string
+  ): Promise<ServiceRenewTokenResponse | null> {
+    const tokenStoreId = await this.getTokenStoreID(userId);
+    if (tokenStoreId) {
+      const response = await this.getDocumentData("usersTokens", tokenStoreId);
+      return { refreshToken: response.nextToken, tokenStoreId };
+    } else {
+      return null;
     }
   }
 }
